@@ -79,6 +79,15 @@ try {
   await page.send('Page.enable');
   await page.send('Runtime.enable');
 
+  // Отметка первого кадра: по ней видно, что приложение успело отрисоваться
+  // и на снимок не попадёт экран-заглушка.
+  await page.send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `
+      window.__ready = null;
+      window.addEventListener('flutter-first-frame', () => { window.__ready = true; });
+    `,
+  });
+
   await page.send('Page.navigate', { url: `${base}/` });
   await waitFor(page, 'window.location.origin');
   const signed = await page.send('Runtime.evaluate', {
@@ -103,8 +112,8 @@ try {
     for (const [name, path] of Object.entries(screens)) {
       await page.send('Page.navigate', { url: `${base}${path}` });
       // Ждём первый кадр, затем даём приложению дорисовать данные с сервера.
-      await waitFor(page, 'window.__ff === undefined ? true : true', 5000);
-      await sleep(2200);
+      await waitFor(page, 'window.__ready', 30000);
+      await sleep(2000);
       const { data } = await page.send('Page.captureScreenshot', {
         format: 'png',
         captureBeyondViewport: false,
