@@ -28,6 +28,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Включает GitHub Pages в настройках репозитория, если он ещё не включён,
+      # и подставляет базовый путь сайта. Без этого шага публикация падает.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
