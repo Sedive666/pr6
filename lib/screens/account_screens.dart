@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../core/api_exceptions.dart';
+import '../core/connectivity.dart';
 import '../core/permissions.dart';
 import '../models/app_user.dart';
 import '../state/auth_notifier.dart';
@@ -21,9 +22,38 @@ class _ApiView extends StatefulWidget {
 
 class _ApiViewState extends State<_ApiView> {
   late Future<dynamic> _future = _load();
+  late final ConnectivityMonitor _net = context.read<ConnectivityMonitor>();
+  bool _failed = false;
 
-  Future<dynamic> _load() =>
-      guard(() async => (await context.read<Dio>().get(widget.path)).data);
+  @override
+  void initState() {
+    super.initState();
+    _net.addListener(_onNetworkChanged);
+  }
+
+  @override
+  void dispose() {
+    _net.removeListener(_onNetworkChanged);
+    super.dispose();
+  }
+
+  /// Связь вернулась — запрос повторяется сам, без обновления страницы.
+  void _onNetworkChanged() {
+    if (mounted && _net.online && _failed) _reload();
+  }
+
+  Future<dynamic> _load() async {
+    try {
+      final data = await guard(
+        () async => (await context.read<Dio>().get(widget.path)).data,
+      );
+      _failed = false;
+      return data;
+    } catch (_) {
+      _failed = true;
+      rethrow;
+    }
+  }
 
   void _reload() {
     setState(() {
@@ -89,7 +119,12 @@ class ForbiddenScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.block, size: 64, color: theme.colorScheme.error),
+              Icon(
+                Icons.block,
+                size: 64,
+                color: theme.colorScheme.error,
+                semanticLabel: 'Доступ запрещён',
+              ),
               Text('403', style: theme.textTheme.displayMedium),
               const SizedBox(height: 8),
               Text(
@@ -134,10 +169,14 @@ class MyOrdersScreen extends StatelessWidget {
                     leading: const Icon(Icons.receipt_long_outlined),
                     title: Text(
                       '${o['number']} · ${(o['sneaker'] as Map?)?['name'] ?? ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: Text(
                       'Размер ${o['size']} · ${o['quantity']} шт. · '
                       '${o['total']} ₽ · ${o['status']}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     trailing:
                         o['status'] == 'Новый' && auth.can(Op.cancelOwnOrder)
@@ -188,8 +227,13 @@ class UsersScreen extends StatelessWidget {
                   child: ListTile(
                     leading: Icon(
                       u.blocked ? Icons.person_off_outlined : Icons.person,
+                      semanticLabel: u.blocked ? 'заблокирован' : 'активен',
                     ),
-                    title: Text('${u.name} (${u.login})'),
+                    title: Text(
+                      '${u.name} (${u.login})',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     subtitle: Text(u.blocked ? 'Заблокирован' : 'Активен'),
                     trailing: Wrap(
                       spacing: 12,
@@ -205,11 +249,16 @@ class UsersScreen extends StatelessWidget {
                               DropdownMenuItem(value: r, child: Text(r.title)),
                           ],
                         ),
-                        Switch(
-                          value: !u.blocked,
-                          onChanged: u.id == me?.id
-                              ? null
-                              : (v) => update(u, {'blocked': !v}),
+                        Semantics(
+                          // Переключатель без подписи: без этого чтение с
+                          // экрана объявляет просто «переключатель».
+                          label: 'Доступ в систему',
+                          child: Switch(
+                            value: !u.blocked,
+                            onChanged: u.id == me?.id
+                                ? null
+                                : (v) => update(u, {'blocked': !v}),
+                          ),
                         ),
                       ],
                     ),

@@ -4,8 +4,9 @@ import 'package:flutter/foundation.dart';
 import '../state/auth_notifier.dart';
 import 'api_exceptions.dart';
 import 'config.dart';
+import 'connectivity.dart';
 
-Dio buildDio({AuthNotifier? auth}) {
+Dio buildDio({AuthNotifier? auth, ConnectivityMonitor? monitor}) {
   final dio = Dio(
     BaseOptions(
       baseUrl: apiBaseUrl,
@@ -35,6 +36,8 @@ Dio buildDio({AuthNotifier? auth}) {
             '${response.requestOptions.uri} → ${response.statusCode}',
           );
         }
+        // Любой ответ сервера — признак, что связь есть.
+        monitor?.reportOnline();
         final status = response.statusCode ?? 0;
         if (status >= 400) {
           return handler.reject(
@@ -50,6 +53,10 @@ Dio buildDio({AuthNotifier? auth}) {
         return handler.next(response);
       },
       onError: (error, handler) {
+        if (error.type == DioExceptionType.connectionError ||
+            error.type == DioExceptionType.connectionTimeout) {
+          monitor?.reportOffline();
+        }
         if (kDebugMode) {
           debugPrint(
             '[API] ${error.requestOptions.method} ${error.requestOptions.uri} '

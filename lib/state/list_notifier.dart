@@ -62,7 +62,13 @@ class ListNotifier<T extends Entity, Q extends ListQuery<Q>>
   }
 
   Future<void> applyQuery(Q next) async {
-    if (next.sameAs(_query) && _status != LoadStatus.idle) return;
+    // После ошибки повторный переход по тому же адресу обязан перезагрузить
+    // список, иначе экран навсегда остаётся в состоянии ошибки.
+    if (next.sameAs(_query) &&
+        _status != LoadStatus.idle &&
+        _status != LoadStatus.error) {
+      return;
+    }
     _query = next;
     _selected.clear();
     await load();

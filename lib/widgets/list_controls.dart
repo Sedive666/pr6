@@ -151,22 +151,34 @@ class PaginationBar extends StatelessWidget {
             children: [
               IconButton(
                 tooltip: 'Первая',
+                visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.first_page),
                 onPressed: page > 1 ? () => onPage(1) : null,
               ),
               IconButton(
                 tooltip: 'Предыдущая',
+                visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.chevron_left),
                 onPressed: page > 1 ? () => onPage(page - 1) : null,
               ),
-              Text('Стр. $page из $totalPages'),
+              // Подпись сжимаема, а кнопки уплотнены: иначе на окне шириной
+              // 360 эта строка переполняется на два десятка пикселей.
+              Flexible(
+                child: Text(
+                  'Стр. $page из $totalPages',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               IconButton(
                 tooltip: 'Следующая',
+                visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.chevron_right),
                 onPressed: page < totalPages ? () => onPage(page + 1) : null,
               ),
               IconButton(
                 tooltip: 'Последняя',
+                visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.last_page),
                 onPressed: page < totalPages ? () => onPage(totalPages) : null,
               ),
@@ -175,7 +187,7 @@ class PaginationBar extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('На странице: '),
+              const Flexible(child: Text('На странице: ')),
               DropdownButton<int>(
                 value: size,
                 items: [
@@ -203,6 +215,7 @@ class ListStateView extends StatelessWidget {
     required this.onRetry,
     required this.onReset,
     required this.child,
+    this.expand = false,
   });
 
   final LoadStatus status;
@@ -212,38 +225,51 @@ class ListStateView extends StatelessWidget {
   final VoidCallback onReset;
   final Widget child;
 
+  /// `true`, когда область данных занимает остаток высоты (режим таблицы):
+  /// тогда прокрутка принадлежит таблице, а сообщения центрируются.
+  final bool expand;
+
+  Widget _fit(Widget message) =>
+      expand ? Center(child: SingleChildScrollView(child: message)) : message;
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     if (status == LoadStatus.error) {
-      return _Message(
-        icon: Icons.cloud_off,
-        color: colors.error,
-        title: 'Ошибка загрузки',
-        text: error ?? '',
-        action: FilledButton.icon(
-          onPressed: onRetry,
-          icon: const Icon(Icons.refresh),
-          label: const Text('Повторить'),
+      return _fit(
+        _Message(
+          icon: Icons.cloud_off,
+          color: colors.error,
+          title: 'Ошибка загрузки',
+          text: error ?? '',
+          action: FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Повторить'),
+          ),
         ),
       );
     }
     if (!hasItems && status != LoadStatus.success) {
-      return const Padding(
-        padding: EdgeInsets.all(48),
-        child: Center(child: CircularProgressIndicator()),
+      return _fit(
+        const Padding(
+          padding: EdgeInsets.all(48),
+          child: Center(child: CircularProgressIndicator()),
+        ),
       );
     }
     if (!hasItems) {
-      return _Message(
-        icon: Icons.search_off,
-        color: colors.outline,
-        title: 'Ничего не найдено',
-        text: 'Под выбранные условия не подходит ни одна запись',
-        action: OutlinedButton.icon(
-          onPressed: onReset,
-          icon: const Icon(Icons.filter_alt_off_outlined),
-          label: const Text('Сбросить условия'),
+      return _fit(
+        _Message(
+          icon: Icons.search_off,
+          color: colors.outline,
+          title: 'Ничего не найдено',
+          text: 'Под выбранные условия не подходит ни одна запись',
+          action: OutlinedButton.icon(
+            onPressed: onReset,
+            icon: const Icon(Icons.filter_alt_off_outlined),
+            label: const Text('Сбросить условия'),
+          ),
         ),
       );
     }
@@ -256,7 +282,7 @@ class ListStateView extends StatelessWidget {
               ? const LinearProgressIndicator()
               : null,
         ),
-        child,
+        if (expand) Expanded(child: child) else child,
       ],
     );
   }
@@ -283,7 +309,7 @@ class _Message extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 16),
       child: Column(
         children: [
-          Icon(icon, size: 64, color: color),
+          Icon(icon, size: 64, color: color, semanticLabel: title),
           const SizedBox(height: 12),
           Text(title, style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),

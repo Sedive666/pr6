@@ -1,11 +1,11 @@
 {
-    "name": "shoe_store",
-    "short_name": "shoe_store",
+    "name": "Магазин кроссовок",
+    "short_name": "Кроссовки",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#fdf7f4",
+    "theme_color": "#e64a19",
+    "description": "Учебное приложение на Flutter Web: каталог кроссовок, заказы и отзывы.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

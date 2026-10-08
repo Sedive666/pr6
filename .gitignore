@@ -46,3 +46,8 @@ app.*.map.json
 
 *.docx
 .claude/
+
+# Каталоги сборки вариантов и промежуточные файлы измерений
+/build/
+tools/bench-out.txt
+tools/results.txt

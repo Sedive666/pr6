@@ -31,12 +31,12 @@ class BrandListScreen extends StatelessWidget {
         TableColumnSpec(
           label: 'Бренд',
           sortField: 'name',
-          build: (b) => Text(b.name),
+          build: (b) => cell(b.name),
         ),
         TableColumnSpec(
           label: 'Страна',
           sortField: 'country',
-          build: (b) => Text(b.country),
+          build: (b) => cell(b.country, maxWidth: 160),
         ),
         TableColumnSpec(
           label: 'Год основания',
@@ -138,9 +138,12 @@ class CategoryListScreen extends StatelessWidget {
         TableColumnSpec(
           label: 'Категория',
           sortField: 'name',
-          build: (c) => Text(c.name),
+          build: (c) => cell(c.name),
         ),
-        TableColumnSpec(label: 'Описание', build: (c) => Text(c.description)),
+        TableColumnSpec(
+          label: 'Описание',
+          build: (c) => cell(c.description, maxWidth: 320, maxLines: 2),
+        ),
       ],
       cardTitle: (c) => c.name,
       cardSubtitle: (c) => c.description,
@@ -223,16 +226,16 @@ class SeriesListScreen extends StatelessWidget {
           TableColumnSpec(
             label: 'Линейка',
             sortField: 'name',
-            build: (s) => Text(s.name),
+            build: (s) => cell(s.name),
           ),
           TableColumnSpec(
             label: 'Бренд',
-            build: (s) => Text(nameOf(o.brands, s.brandId, (b) => b.name)),
+            build: (s) => cell(nameOf(o.brands, s.brandId, (b) => b.name)),
           ),
           TableColumnSpec(
             label: 'Страна',
             sortField: 'country',
-            build: (s) => Text(s.country),
+            build: (s) => cell(s.country, maxWidth: 160),
           ),
           TableColumnSpec(
             label: 'Год запуска',

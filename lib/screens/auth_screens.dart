@@ -162,6 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   labelText: 'Пароль',
                   prefixIcon: const Icon(Icons.lock_outline),
                   suffixIcon: IconButton(
+                    tooltip: _hidden ? 'Показать пароль' : 'Скрыть пароль',
                     icon: Icon(
                       _hidden ? Icons.visibility : Icons.visibility_off,
                     ),
@@ -262,6 +263,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               TextFormField(
                 controller: _name,
+                autofocus: true,
+                textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(labelText: 'Имя'),
                 validator: notEmpty('Укажите имя'),
               ),
@@ -295,6 +298,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           : Icons.radio_button_unchecked,
                       size: 18,
                       color: ok(_password.text) ? Colors.green : scheme.outline,
+                      semanticLabel: ok(_password.text)
+                          ? 'выполнено'
+                          : 'не выполнено',
                     ),
                     const SizedBox(width: 8),
                     Text(label),
@@ -305,6 +311,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _repeat,
                 obscureText: true,
                 decoration: const InputDecoration(labelText: 'Повтор пароля'),
+                onFieldSubmitted: (_) => _submit(),
                 validator: (v) =>
                     v == _password.text ? null : 'Пароли не совпадают',
               ),

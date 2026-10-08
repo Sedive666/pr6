@@ -33,17 +33,22 @@ class SneakerListScreen extends StatelessWidget {
           TableColumnSpec(
             label: 'Модель',
             sortField: 'name',
-            build: (s) => Text(s.name),
+            build: (s) => cell(s.name),
           ),
-          TableColumnSpec(label: 'Артикул', build: (s) => Text(s.sku)),
+          TableColumnSpec(
+            label: 'Артикул',
+            build: (s) => cell(s.sku, maxWidth: 140),
+          ),
           TableColumnSpec(
             label: 'Бренд',
-            build: (s) => Text(nameOf(o.brands, s.brandId, (b) => b.name)),
+            build: (s) => cell(nameOf(o.brands, s.brandId, (b) => b.name)),
           ),
           TableColumnSpec(
             label: 'Категории',
-            build: (s) =>
-                Text(namesOf(o.categories, s.categoryIds, (c) => c.name)),
+            build: (s) => cell(
+              namesOf(o.categories, s.categoryIds, (c) => c.name),
+              maxWidth: 240,
+            ),
           ),
           TableColumnSpec(
             label: 'Год',

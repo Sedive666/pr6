@@ -32,14 +32,17 @@ class CustomerListScreen extends StatelessWidget {
             TableColumnSpec(
               label: 'Покупатель',
               sortField: 'name',
-              build: (c) => Text(c.fullName),
+              build: (c) => cell(c.fullName),
             ),
-            TableColumnSpec(label: 'Почта', build: (c) => Text(c.email)),
-            TableColumnSpec(label: 'Телефон', build: (c) => Text(c.phone)),
+            TableColumnSpec(label: 'Почта', build: (c) => cell(c.email)),
+            TableColumnSpec(
+              label: 'Телефон',
+              build: (c) => cell(c.phone, maxWidth: 160),
+            ),
             TableColumnSpec(
               label: 'Город',
               sortField: 'city',
-              build: (c) => Text(c.city),
+              build: (c) => cell(c.city, maxWidth: 160),
             ),
             TableColumnSpec(
               label: 'Карта',

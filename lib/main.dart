@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/api_client.dart';
 import 'core/auth_api.dart';
+import 'core/connectivity.dart';
 import 'models/queries.dart';
 import 'repositories/repositories.dart';
 import 'router.dart';
@@ -24,24 +25,44 @@ Future<void> main() async {
 
 final messengerKey = GlobalKey<ScaffoldMessengerState>();
 
-class ShoeStoreApp extends StatelessWidget {
+class ShoeStoreApp extends StatefulWidget {
   const ShoeStoreApp({
     super.key,
     required this.auth,
     required this.router,
     this.dio,
+    this.monitor,
   });
 
   final AuthNotifier auth;
   final GoRouter router;
   final Dio? dio;
+  final ConnectivityMonitor? monitor;
+
+  @override
+  State<ShoeStoreApp> createState() => _ShoeStoreAppState();
+}
+
+class _ShoeStoreAppState extends State<ShoeStoreApp> {
+  // Монитор связи создаётся один раз на всё время работы приложения.
+  late final ConnectivityMonitor _net = widget.monitor ?? ConnectivityMonitor();
+
+  @override
+  void dispose() {
+    if (widget.monitor == null) _net.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final auth = widget.auth;
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthNotifier>.value(value: auth),
-        Provider<Dio>(create: (_) => dio ?? buildDio(auth: auth)),
+        ChangeNotifierProvider<ConnectivityMonitor>.value(value: _net),
+        Provider<Dio>(
+          create: (_) => widget.dio ?? buildDio(auth: auth, monitor: _net),
+        ),
         ProxyProvider<Dio, Repositories>(
           update: (_, dio, __) => Repositories(dio),
         ),
@@ -96,7 +117,7 @@ class ShoeStoreApp extends StatelessWidget {
           useMaterial3: true,
         ),
         scaffoldMessengerKey: messengerKey,
-        routerConfig: router,
+        routerConfig: widget.router,
         builder: (context, child) => InactivityWatcher(
           auth: auth,
           messengerKey: messengerKey,

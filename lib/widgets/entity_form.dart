@@ -110,8 +110,9 @@ class _EntityFormScreenState extends State<EntityFormScreen> {
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Несохранённые изменения'),
-        content: const Text(
-          'Изменения в форме не сохранены. Покинуть страницу?',
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Text('Изменения в форме не сохранены. Покинуть страницу?'),
         ),
         actions: [
           TextButton(
@@ -208,48 +209,60 @@ class _EntityFormScreenState extends State<EntityFormScreen> {
             : Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 640),
-                  child: Form(
-                    key: _formKey,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    onChanged: _touch,
-                    child: ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        for (final field in widget.fields(_values))
-                          _buildField(field),
-                        const SizedBox(height: 24),
-                        FilledButton.icon(
-                          onPressed: _saving ? null : _submit,
-                          icon: const Icon(Icons.save_outlined),
-                          label: Text(
-                            widget.isEditing ? 'Сохранить' : 'Создать',
+                  child: FocusTraversalGroup(
+                    policy: OrderedTraversalPolicy(),
+                    child: Form(
+                      key: _formKey,
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      onChanged: _touch,
+                      child: ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          for (final field in widget.fields(_values))
+                            _buildField(field),
+                          const SizedBox(height: 24),
+                          FilledButton.icon(
+                            onPressed: _saving ? null : _submit,
+                            icon: const Icon(Icons.save_outlined),
+                            label: Text(
+                              widget.isEditing ? 'Сохранить' : 'Создать',
+                            ),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                            ),
                           ),
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
+                          const SizedBox(height: 8),
+                          OutlinedButton(
+                            onPressed: _saving
+                                ? null
+                                : () async {
+                                    if (await _confirmLeave() && mounted) {
+                                      _dirty = false;
+                                      _leave();
+                                    }
+                                  },
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                            ),
+                            child: const Text('Отмена'),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        OutlinedButton(
-                          onPressed: _saving
-                              ? null
-                              : () async {
-                                  if (await _confirmLeave() && mounted) {
-                                    _dirty = false;
-                                    _leave();
-                                  }
-                                },
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                          ),
-                          child: const Text('Отмена'),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
       ),
     );
+  }
+
+  /// Имя первого текстового поля формы: оно получает фокус при открытии,
+  /// чтобы можно было сразу печатать, не беря мышь.
+  String? get _firstTextField {
+    for (final f in widget.fields(_values)) {
+      if (f is TextFieldSpec) return f.name;
+    }
+    return null;
   }
 
   Widget _buildField(FieldSpec field) => Padding(
@@ -263,18 +276,33 @@ class _EntityFormScreenState extends State<EntityFormScreen> {
     },
   );
 
-  Widget _text(TextFieldSpec f) => TextFormField(
-    controller: _controllers[f.name],
-    keyboardType: f.numeric
-        ? TextInputType.number
-        : (f.multiline ? TextInputType.multiline : TextInputType.text),
-    inputFormatters: f.numeric
-        ? [FilteringTextInputFormatter.digitsOnly]
-        : null,
-    maxLines: f.multiline ? 4 : 1,
-    decoration: fieldDecoration(f.label, hint: f.hint),
-    validator: (v) => _fieldErrors[f.name] ?? f.validator?.call(v),
-  );
+  Widget _text(TextFieldSpec f) {
+    return TextFormField(
+      controller: _controllers[f.name],
+      autofocus: f.name == _firstTextField,
+      keyboardType: f.numeric
+          ? TextInputType.number
+          : (f.multiline ? TextInputType.multiline : TextInputType.text),
+      inputFormatters: f.numeric
+          ? [FilteringTextInputFormatter.digitsOnly]
+          : null,
+      maxLines: f.multiline ? 4 : 1,
+      // Enter в однострочном поле переходит к следующему, в последнем —
+      // отправляет форму.
+      textInputAction: f.multiline
+          ? TextInputAction.newline
+          : TextInputAction.next,
+      onFieldSubmitted: f.multiline ? null : (_) => _nextOrSubmit(),
+      decoration: fieldDecoration(f.label, hint: f.hint),
+      validator: (v) => _fieldErrors[f.name] ?? f.validator?.call(v),
+    );
+  }
+
+  void _nextOrSubmit() {
+    final scope = FocusScope.of(context);
+    if (scope.nextFocus()) return;
+    if (!_saving) _submit();
+  }
 
   List<DropdownEntry> _entries(
     List<DropdownEntry> Function(FormValues) options,

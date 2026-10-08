@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -89,6 +90,15 @@ class FakeApi implements HttpClientAdapter {
 
   final List<RequestOptions> requests = [];
 
+  /// Пока задано, ответы ждут завершения: так виджет-тест успевает увидеть
+  /// состояние загрузки, которое иначе проскакивает за один кадр.
+  Completer<void>? gate;
+
+  /// Сколько следующих ответов отдать ошибкой сервера. Нужно, чтобы
+  /// проверить не только появление состояния ошибки, но и восстановление
+  /// по кнопке «Повторить».
+  int failures = 0;
+
   ResponseBody _json(int status, Object body) => ResponseBody.fromString(
     jsonEncode(body),
     status,
@@ -104,6 +114,11 @@ class FakeApi implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     requests.add(options);
+    if (gate != null) await gate!.future;
+    if (failures > 0) {
+      failures--;
+      return _json(500, {'message': 'Сервер временно недоступен'});
+    }
     final q = options.queryParameters;
     if (q['__fail'] != null) {
       return _json(int.tryParse('${q['__fail']}') ?? 500, {
@@ -117,6 +132,9 @@ class FakeApi implements HttpClientAdapter {
         .toList();
     if (parts.length < 2 || parts.first != 'api') {
       return _json(404, {'message': 'Ресурс не найден'});
+    }
+    if (parts.length == 2 && parts[1] == '__health') {
+      return _json(200, {'ok': true});
     }
     final rows = data[parts[1]];
     if (rows == null) return _json(404, {'message': 'Ресурс не найден'});
@@ -168,3 +186,12 @@ Dio fakeDio([FakeApi? api]) {
   dio.httpClientAdapter = api ?? FakeApi();
   return dio;
 }
+
+/// Транспорт, направленный в порт, где ничего не слушает: так в тестах
+/// воспроизводится полностью недоступный сервер.
+Dio offlineProbe() => Dio(
+  BaseOptions(
+    baseUrl: 'http://127.0.0.1:9/api',
+    connectTimeout: const Duration(milliseconds: 200),
+  ),
+);

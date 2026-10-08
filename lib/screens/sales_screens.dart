@@ -32,7 +32,7 @@ class OrderListScreen extends StatelessWidget {
           TableColumnSpec(
             label: 'Номер',
             sortField: 'number',
-            build: (x) => Text(x.number),
+            build: (x) => cell(x.number, maxWidth: 160),
           ),
           TableColumnSpec(
             label: 'Дата',
@@ -42,11 +42,11 @@ class OrderListScreen extends StatelessWidget {
           TableColumnSpec(
             label: 'Покупатель',
             build: (x) =>
-                Text(nameOf(o.customers, x.customerId, (c) => c.fullName)),
+                cell(nameOf(o.customers, x.customerId, (c) => c.fullName)),
           ),
           TableColumnSpec(
             label: 'Модель',
-            build: (x) => Text(nameOf(o.sneakers, x.sneakerId, (s) => s.name)),
+            build: (x) => cell(nameOf(o.sneakers, x.sneakerId, (s) => s.name)),
           ),
           TableColumnSpec(
             label: 'Размер',
@@ -64,7 +64,10 @@ class OrderListScreen extends StatelessWidget {
             numeric: true,
             build: (x) => Text(formatPrice(x.total)),
           ),
-          TableColumnSpec(label: 'Статус', build: (x) => Text(x.status)),
+          TableColumnSpec(
+            label: 'Статус',
+            build: (x) => cell(x.status, maxWidth: 140),
+          ),
         ],
         cardTitle: (x) => '${x.number} · ${formatPrice(x.total)} ₽',
         cardSubtitle: (x) =>
@@ -243,11 +246,11 @@ class ReviewListScreen extends StatelessWidget {
           TableColumnSpec(
             label: 'Покупатель',
             build: (r) =>
-                Text(nameOf(o.customers, r.customerId, (c) => c.fullName)),
+                cell(nameOf(o.customers, r.customerId, (c) => c.fullName)),
           ),
           TableColumnSpec(
             label: 'Модель',
-            build: (r) => Text(nameOf(o.sneakers, r.sneakerId, (s) => s.name)),
+            build: (r) => cell(nameOf(o.sneakers, r.sneakerId, (s) => s.name)),
           ),
           TableColumnSpec(
             label: 'Оценка',
@@ -257,10 +260,7 @@ class ReviewListScreen extends StatelessWidget {
           ),
           TableColumnSpec(
             label: 'Отзыв',
-            build: (r) => SizedBox(
-              width: 280,
-              child: Text(r.text, maxLines: 2, overflow: TextOverflow.ellipsis),
-            ),
+            build: (r) => cell(r.text, maxWidth: 280, maxLines: 2),
           ),
         ],
         cardTitle: (r) =>

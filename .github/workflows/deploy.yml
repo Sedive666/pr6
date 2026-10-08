@@ -1,0 +1,67 @@
+# Сборка и публикация на GitHub Pages при каждом изменении ветки main.
+# Перед сборкой — те же проверки, что и локально: анализатор, форматирование,
+# тесты. Если хоть одна не прошла, публикации не будет.
+name: Сборка и публикация
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Одновременно идёт только одна публикация; новая отменяет предыдущую.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  # Адрес API задаётся при сборке, в исходном коде его нет.
+  # Сервер запускается на том же компьютере: node api/mock-server.js
+  API_BASE_URL: http://localhost:8080/api
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.35.3
+          cache: true
+      - run: flutter pub get
+      - name: Анализатор
+        run: flutter analyze
+      - name: Форматирование
+        run: dart format --set-exit-if-changed lib test
+      - name: Тесты
+        run: flutter test
+      - name: Сборка
+        # Сайт лежит в подкаталоге по имени репозитория, поэтому базовый путь
+        # обязателен: без него браузер искал бы main.dart.js в корне домена.
+        run: >-
+          flutter build web --release
+          --base-href /${{ github.event.repository.name }}/
+          --dart-define=API_BASE_URL=$API_BASE_URL
+      - name: Страница 404 для прямых ссылок
+        # GitHub Pages не умеет перенаправлять неизвестные пути на index.html,
+        # но отдаёт 404.html. Её копия с index.html загружает приложение, и
+        # оно само разбирает адрес и открывает нужный экран.
+        run: cp build/web/index.html build/web/404.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

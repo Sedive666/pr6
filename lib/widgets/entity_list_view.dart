@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../core/breakpoints.dart';
+import '../core/connectivity.dart';
 import '../core/permissions.dart';
 import '../models/entity.dart';
 import '../models/list_query.dart';
@@ -43,10 +45,26 @@ class _EntityListViewState<T extends Entity, Q extends ListQuery<Q>>
     extends State<EntityListView<T, Q>> {
   ListNotifier<T, Q> get _notifier => context.read<ListNotifier<T, Q>>();
 
+  late final ConnectivityMonitor _net = context.read<ConnectivityMonitor>();
+
   @override
   void initState() {
     super.initState();
+    _net.addListener(_onNetworkChanged);
     _sync();
+  }
+
+  @override
+  void dispose() {
+    _net.removeListener(_onNetworkChanged);
+    super.dispose();
+  }
+
+  /// Связь с сервером вернулась — список перезагружается сам, пользователю
+  /// не нужно ни обновлять страницу, ни нажимать «Повторить».
+  void _onNetworkChanged() {
+    if (!mounted) return;
+    if (_net.online && _notifier.status == LoadStatus.error) _notifier.load();
   }
 
   @override
@@ -84,7 +102,12 @@ class _EntityListViewState<T extends Entity, Q extends ListQuery<Q>>
       context: context,
       builder: (c) => AlertDialog(
         title: Text(title),
-        content: Text(text),
+        // Без ограничения диалог растягивается по содержимому почти на всю
+        // ширину монитора.
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Text(text),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
@@ -207,114 +230,138 @@ class _EntityListViewState<T extends Entity, Q extends ListQuery<Q>>
       title: widget.title,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final narrow = constraints.maxWidth < 600;
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  SizedBox(
-                    width: narrow ? double.infinity : 280,
-                    child: SearchField(
-                      value: q.search,
-                      hint: widget.searchHint,
-                      onChanged: (s) => _go(q.copyBase(search: s)),
-                    ),
-                  ),
-                  ...?widget.filters?.call(q, _go),
-                  if (auth.can(Op.viewDeleted))
-                    FilterChip(
-                      label: const Text('Показывать удалённые'),
-                      selected: q.includeDeleted,
-                      onSelected: (v) => _go(q.copyBase(includeDeleted: v)),
-                    ),
-                  if (narrow) _sortMenu(q),
-                  if (q.hasFilters)
-                    TextButton.icon(
-                      onPressed: () => _go(q.reset()),
-                      icon: const Icon(Icons.filter_alt_off_outlined),
-                      label: const Text('Сбросить'),
-                    ),
-                  if (auth.can(Op.editRecords))
-                    FilledButton.icon(
-                      onPressed: () => context.push('${widget.basePath}/new'),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Добавить'),
-                    ),
-                ],
-              ),
-              if (n.hasSelection && auth.can(Op.softDelete))
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        'Выбрано: ${n.selected.length}',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      TextButton(
-                        onPressed: n.clearSelection,
-                        child: const Text('Снять выделение'),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: _deleteSelected,
-                        icon: const Icon(Icons.delete_sweep_outlined),
-                        label: const Text('Удалить выбранные'),
-                      ),
-                    ],
+          final layout = layoutOf(constraints.maxWidth);
+          final header = <Widget>[
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: layout == Layout.compact ? double.infinity : 280,
+                  child: SearchField(
+                    value: q.search,
+                    hint: widget.searchHint,
+                    onChanged: (s) => _go(q.copyBase(search: s)),
                   ),
                 ),
-              const SizedBox(height: 12),
-              ListStateView(
-                status: n.status,
-                error: n.error,
-                hasItems: result.items.isNotEmpty,
-                onRetry: n.load,
-                onReset: () => _go(q.reset()),
-                child: narrow
-                    ? EntityCardList<T>(
-                        items: result.items,
-                        idOf: (e) => e.id,
-                        title: widget.cardTitle,
-                        subtitle: widget.cardSubtitle,
-                        selected: n.selected,
-                        onToggleSelect: n.toggleSelection,
-                        actions: _actions,
-                        muted: (e) => e.isDeleted,
-                        onTap: _open,
-                      )
-                    : EntityTable<T>(
-                        columns: widget.columns,
-                        items: result.items,
-                        idOf: (e) => e.id,
-                        selected: n.selected,
-                        onToggleSelect: n.toggleSelection,
-                        onToggleAll: (v) =>
-                            n.setSelection(result.items.map((e) => e.id), v),
-                        sortField: q.sortField,
-                        sortAscending: q.sortAscending,
-                        onSort: _sort,
-                        actions: _actions,
-                        muted: (e) => e.isDeleted,
-                        onTap: _open,
-                      ),
+                ...?widget.filters?.call(q, _go),
+                if (auth.can(Op.viewDeleted))
+                  FilterChip(
+                    label: const Text('Показывать удалённые'),
+                    selected: q.includeDeleted,
+                    onSelected: (v) => _go(q.copyBase(includeDeleted: v)),
+                  ),
+                // В таблице сортировка переключается щелчком по заголовку
+                // колонки, в карточках — этим меню.
+                if (!layout.showsTable) _sortMenu(q),
+                if (q.hasFilters)
+                  TextButton.icon(
+                    onPressed: () => _go(q.reset()),
+                    icon: const Icon(Icons.filter_alt_off_outlined),
+                    label: const Text('Сбросить'),
+                  ),
+                if (auth.can(Op.editRecords))
+                  FilledButton.icon(
+                    onPressed: () => context.push('${widget.basePath}/new'),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Добавить'),
+                  ),
+              ],
+            ),
+            if (n.hasSelection && auth.can(Op.softDelete))
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      'Выбрано: ${n.selected.length}',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    TextButton(
+                      onPressed: n.clearSelection,
+                      child: const Text('Снять выделение'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: _deleteSelected,
+                      icon: const Icon(Icons.delete_sweep_outlined),
+                      label: const Text('Удалить выбранные'),
+                    ),
+                  ],
+                ),
               ),
-              if (result.total > 0 && n.status != LoadStatus.error)
-                PaginationBar(
+            const SizedBox(height: 12),
+          ];
+
+          final data = ListStateView(
+            status: n.status,
+            error: n.error,
+            hasItems: result.items.isNotEmpty,
+            onRetry: n.load,
+            onReset: () => _go(q.reset()),
+            expand: layout.showsTable,
+            child: !layout.showsTable
+                ? EntityCardList<T>(
+                    items: result.items,
+                    idOf: (e) => e.id,
+                    title: widget.cardTitle,
+                    subtitle: widget.cardSubtitle,
+                    selected: n.selected,
+                    onToggleSelect: n.toggleSelection,
+                    actions: _actions,
+                    muted: (e) => e.isDeleted,
+                    onTap: _open,
+                  )
+                : EntityTable<T>(
+                    columns: widget.columns,
+                    items: result.items,
+                    idOf: (e) => e.id,
+                    selected: n.selected,
+                    onToggleSelect: n.toggleSelection,
+                    onToggleAll: (v) =>
+                        n.setSelection(result.items.map((e) => e.id), v),
+                    sortField: q.sortField,
+                    sortAscending: q.sortAscending,
+                    onSort: _sort,
+                    actions: _actions,
+                    muted: (e) => e.isDeleted,
+                    onTap: _open,
+                  ),
+          );
+
+          final pagination = result.total > 0 && n.status != LoadStatus.error
+              ? PaginationBar(
                   page: result.page,
                   totalPages: result.totalPages,
                   total: result.total,
                   size: result.size,
                   onPage: (p) => _go(q.copyBase(page: p)),
                   onSize: (s) => _go(q.copyBase(size: s)),
-                ),
-            ],
+                )
+              : const SizedBox.shrink();
+
+          // Таблица: отбор и пагинация закреплены, прокручивается сама
+          // таблица — по вертикали и по горизонтали.
+          if (layout.showsTable) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  ...header,
+                  Expanded(child: data),
+                  pagination,
+                ],
+              ),
+            );
+          }
+          // Карточки: панель отбора на узком окне занимает несколько строк,
+          // поэтому прокручивается вся страница целиком.
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [...header, data, pagination],
           );
         },
       ),
@@ -384,27 +431,7 @@ class EntityDetailView<T extends Entity, Q extends ListQuery<Q>>
                                   ),
                                 const SizedBox(height: 16),
                                 for (final (label, value) in fields(item))
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 4,
-                                    ),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        SizedBox(
-                                          width: 170,
-                                          child: Text(
-                                            label,
-                                            style: TextStyle(
-                                              color: theme.colorScheme.outline,
-                                            ),
-                                          ),
-                                        ),
-                                        Expanded(child: Text(value)),
-                                      ],
-                                    ),
-                                  ),
+                                  _DetailRow(label: label, value: value),
                                 if (extra != null) ...[
                                   const SizedBox(height: 16),
                                   extra!(context, item),
@@ -438,6 +465,39 @@ class EntityDetailView<T extends Entity, Q extends ListQuery<Q>>
           );
         },
       ),
+    );
+  }
+}
+
+/// Строка карточки записи. На узком окне метка 170 пикселей съедала половину
+/// экрана, поэтому там метка и значение идут друг под другом.
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(color: Theme.of(context).colorScheme.outline);
+    final stacked = MediaQuery.sizeOf(context).width < Bp.compact;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: stacked
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: style),
+                Text(value),
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(width: 170, child: Text(label, style: style)),
+                Expanded(child: Text(value)),
+              ],
+            ),
     );
   }
 }
