@@ -50,3 +50,6 @@ app.*.map.json
 /build/
 tools/bench-out.txt
 tools/results.txt
+
+# Снимки экранов для отчёта хранятся локально
+/отчёт/
