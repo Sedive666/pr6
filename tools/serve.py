@@ -35,6 +35,7 @@ COMPRESSIBLE = (
 
 class Handler(SimpleHTTPRequestHandler):
     root = "build/web"
+    isolate = False
 
     def translate_path(self, path):
         rel = path.split("?", 1)[0].split("#", 1)[0].lstrip("/")
@@ -68,9 +69,12 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Encoding", "gzip")
         self.send_header("Cache-Control", "no-store")
         # Сборка на WebAssembly использует многопоточную отрисовку skwasm,
-        # а она работает только в изолированном источнике.
-        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
-        self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+        # а она работает только в изолированном источнике. Обычной сборке эти
+        # заголовки, наоборот, мешают: под ними браузер отказывается грузить
+        # отложенные части кода, и приложение падает при открытии раздела.
+        if Handler.isolate:
+            self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+            self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
         self.end_headers()
         self.wfile.write(body)
 
@@ -81,6 +85,7 @@ class Handler(SimpleHTTPRequestHandler):
 def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 5555
     Handler.root = sys.argv[2] if len(sys.argv) > 2 else "build/web"
+    Handler.isolate = "--isolate" in sys.argv
     print(f"http://127.0.0.1:{port}/  ->  {Handler.root}", flush=True)
     HTTPServer(("127.0.0.1", port), Handler).serve_forever()
 

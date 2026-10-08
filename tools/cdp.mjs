@@ -22,13 +22,13 @@ export function findChrome() {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Запускает Chrome с чистым профилем и подключается к нему. */
-export async function launchChrome({ port = 9333, windowSize = '1280,900' } = {}) {
+export async function launchChrome({ port = 9333, windowSize = '1280,900', headless = true } = {}) {
   const profile = mkdtempSync(join(tmpdir(), 'pr6-chrome-'));
   const bin = findChrome();
   const child = spawn(
     bin,
     [
-      '--headless=new',
+      ...(headless ? ['--headless=new'] : []),
       `--remote-debugging-port=${port}`,
       `--user-data-dir=${profile}`,
       `--window-size=${windowSize}`,
